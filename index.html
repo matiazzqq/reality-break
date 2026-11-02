@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CHAOS REALM: Reality Break</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#050508;
+  overflow:hidden;
+  font-family:'Courier New',monospace;
+  color:#fff;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+canvas{display:block}
+
+#ui{
+  position:absolute;inset:0;
+  pointer-events:none;
+  z-index:10;
+  display:flex;flex-direction:column;
+  justify-content:space-between;
+  padding:14px;
+}
+.top-bar{
+  display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;
+}
+.stat{
+  background:rgba(0,0,0,.7);
+  border:1px solid rgba(180,0,255,.4);
+  padding:8px 14px;
+  border-radius:8px;
+  font-size:14px;font-weight:bold;
+  letter-spacing:1px;
+}
+.stat span{color:#c0f}
+.stat.score span{color:#0ff}
+
+/* Индикатор гравитации */
+.grav-ind{
+  position:absolute;
+  top:60px;left:50%;
+  transform:translateX(-50%);
+  font-size:28px;
+  color:#c0f;
+  text-shadow:0 0 15px #c0f;
+  pointer-events:none;
+}
+
+.bottom-hint{
+  text-align:center;
+  color:rgba(192,0,255,.4);
+  font-size:12px;
+  padding-bottom:4px;
+}
+
+/* Мобильные кнопки гравитации */
+.grav-buttons{
+  position:absolute;
+  bottom:20px;right:20px;
+  display:grid;
+  grid-template-columns:60px 60px 60px;
+  grid-template-rows:60px 60px 60px;
+  gap:6px;
+  pointer-events:auto;
+}
+.grav-btn{
+  width:60px;height:60px;
+  border-radius:12px;
+  border:2px solid rgba(192,0,255,.5);
+  background:rgba(40,0,60,.5);
+  color:#c0f;
+  font-size:24px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:.15s;
+}
+.grav-btn:active{
+  background:rgba(192,0,255,.4);
+  transform:scale(.92);
+}
+.grav-btn.up{grid-column:2;grid-row:1}
+.grav-btn.left{grid-column:1;grid-row:2}
+.grav-btn.right{grid-column:3;grid-row:2}
+.grav-btn.down{grid-column:2;grid-row:3}
+
+/* Меню */
+.menu{
+  position:absolute;inset:0;
+  z-index:100;
+  background:rgba(0,0,0,.92);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;padding:20px;
+  pointer-events:auto;
+  visibility:visible;opacity:1;
+  transition:opacity .25s;
+}
+.hidden{
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+h1{
+  font-size:min(12vw,64px);
+  letter-spacing:4px;
+  color:#c0f;
+  text-shadow:0 0 20px #c0f,3px 3px 0 #305;
+  animation:glitch 2s infinite;
+  margin-bottom:10px;
+}
+@keyframes glitch{
+  0%,100%{transform:translate(0)}
+  20%{transform:translate(-2px,2px)}
+  40%{transform:translate(2px,-2px)}
+  60%{transform:translate(-2px,-2px)}
+  80%{transform:translate(2px,2px)}
+}
+p{color:#a8a;font-size:15px;line-height:1.6;margin-bottom:22px;max-width:520px}
+.btn{
+  padding:14px 42px;
+  font-size:18px;font-weight:bold;
+  font-family:'Courier New',monospace;
+  background:transparent;
+  border:2px solid #c0f;
+  color:#c0f;
+  cursor:pointer;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  transition:.2s;
+  outline:none;
+}
+.btn:hover{background:#c0f;color:#000;box-shadow:0 0 30px #c0f}
+.final-score{font-size:32px;color:#0ff;margin:12px 0;text-shadow:0 0 15px #0ff}
+.hint{margin-top:15px;font-size:12px;color:#555}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div class="top-bar">
+    <div class="stat">УРОВЕНЬ: <span id="lvlVal">1/5</span></div>
+    <div class="stat score">ОЧКИ: <span id="scoreVal">0</span></div>
+    <div class="stat">СМЕРТИ: <span id="deathVal">0</span></div>
+  </div>
+  <div class="grav-ind" id="gravInd">⬇</div>
+  <div class="bottom-hint">Стрелки / WASD — изменить гравитацию. Доведи сферу до зелёного выхода!</div>
+</div>
+
+<!-- Мобильные кнопки -->
+<div class="grav-buttons" id="gravButtons">
+  <button class="grav-btn up" data-dir="up">⬆</button>
+  <button class="grav-btn left" data-dir="left">⬅</button>
+  <button class="grav-btn right" data-dir="right">➡</button>
+  <button class="grav-btn down" data-dir="down">⬇</button>
+</div>
+
+<!-- СТАРТ -->
+<div id="startMenu" class="menu">
+  <h1>REALITY<br>BREAK</h1>
+  <p>
+    Гравитация сломана. Ты управляешь ей.<br><br>
+    ⬆⬇⬅➡ — менять направление гравитации.<br>
+    Сфера данных падает в выбранную сторону.<br>
+    Доведи её до зелёного выхода.<br><br>
+    💀 Шипы убивают. 💎 Бонусы дают очки.
+  </p>
+  <button class="btn" id="btnStart">СЛОМАТЬ РЕАЛЬНОСТЬ ▶</button>
+  <div class="hint">5 уровней. Каждая смерть +1 к счётчику позора.</div>
+</div>
+
+<!-- УРОВЕНЬ ПРОЙДЕН -->
+<div id="winMenu" class="menu hidden">
+  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff">СЕКТОР<br>СТАБИЛИЗИРОВАН</h1>
+  <div class="final-score" id="winScore">0</div>
+  <button class="btn" id="btnNext">СЛЕДУЮЩИЙ СЕКТОР →</button>
+</div>
+
+<!-- ИГРА ПРОЙДЕНА -->
+<div id="finalMenu" class="menu hidden">
+  <h1 style="color:#ff0;text-shadow:0 0 20px #ff0">РЕАЛЬНОСТЬ<br>ВОССТАНОВЛЕНА</h1>
+  <p>Ты прошёл все 5 секторов!</p>
+  <div class="final-score" id="finalScore">0</div>
+  <button class="btn" id="btnFinalRestart">ИГРАТЬ СНОВА ↺</button>
+</div>
+
+<!-- СМЕРТЬ (быстрый рестарт) -->
+<div id="deathFlash" style="position:absolute;inset:0;background:rgba(255,0,0,.3);z-index:50;pointer-events:none;opacity:0;transition:opacity .3s"></div>
+
+<script>
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx=null;
+function initAudio(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+}
+function tone(freq,type,dur,vol,delay=0){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime+delay;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type;o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+dur+0.05);
+}
+function noiseBuf(dur,vol,freq){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const bs=audioCtx.sampleRate*dur;
+  const buf=audioCtx.createBuffer(1,bs,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<bs;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/bs,2);
+  const src=audioCtx.createBufferSource();src.buffer=buf;
+  const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=freq;
+  const g=audioCtx.createGain();g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(f);f.connect(g);g.connect(audioCtx.destination);
+  src.start();
+}
+const SFX={
+  grav(){tone(400,'square',0.08,0.06);tone(600,'square',0.08,0.04,0.04)},
+  bounce(){tone(200,'sine',0.05,0.05)},
+  death(){tone(150,'sawtooth',0.3,0.15);noiseBuf(0.2,0.1,400)},
+  bonus(){tone(1000,'sine',0.1,0.08);tone(1500,'sine',0.12,0.06,0.06)},
+  win(){[523,659,784,1046].forEach((f,i)=>tone(f,'triangle',0.25,0.09,i*0.1))},
+  finalWin(){[523,659,784,1046,1318,1568].forEach((f,i)=>tone(f,'triangle',0.3,0.09,i*0.12))}
+};
+
+// ============================================================
+// CANVAS
+// ============================================================
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const PI2=Math.PI*2;
+let W,H;
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W;canvas.height=H;
+  computeLayout();
+}
+window.addEventListener('resize',resize);
+
+// ============================================================
+// DOM
+// ============================================================
+const lvlVal=document.getElementById('lvlVal');
+const scoreVal=document.getElementById('scoreVal');
+const deathVal=document.getElementById('deathVal');
+const gravInd=document.getElementById('gravInd');
+const deathFlash=document.getElementById('deathFlash');
+
+const startMenu=document.getElementById('startMenu');
+const winMenu=document.getElementById('winMenu');
+const finalMenu=document.getElementById('finalMenu');
+const btnStart=document.getElementById('btnStart');
+const btnNext=document.getElementById('btnNext');
+const btnFinalRestart=document.getElementById('btnFinalRestart');
+const winScore=document.getElementById('winScore');
+const finalScore=document.getElementById('finalScore');
+
+// ============================================================
+// УРОВНИ (тайловые карты)
+// # = стена, . = пусто, S = шип, B = бонус, P = старт, E = выход
+// ============================================================
+const LEVELS=[
+  [
+    '########',
+    '#P.....#',
+    '#......#',
+    '#......#',
+    '#.....E#',
+    '########'
+  ],
+  [
+    '##########',
+    '#P...S...#',
+    '#.######.#',
+    '#.#....#.#',
+    '#.#.B..#.#',
+    '#.#....#.#',
+    '#.######.#',
+    '#.......E#',
+    '##########'
+  ],
+  [
+    '##########',
+    '#P..S....#',
+    '#.####.#.#',
+    '#.#..#.#.#',
+    '#.#B.#.#.#',
+    '#.#..#.#.#',
+    '#.####.#.#',
+    '#......#.#',
+    '#S#####..#',
+    '#.......E#',
+    '##########'
+  ],
+  [
+    '############',
+    '#P....S....#',
+    '#.########.#',
+    '#.#......#.#',
+    '#.#.####.#.#',
+    '#.#.#B.#.#.#',
+    '#.#.#..#.#.#',
+    '#.#.####.#.#',
+    '#.#......#.#',
+    '#.########.#',
+    '#....S.....#',
+    '#.........E#',
+    '############'
+  ],
+  [
+    '##############',
+    '#P...S...S...#',
+    '#.####.####..#',
+    '#.#..#.#..#..#',
+    '#.#B.#.#B.#..#',
+    '#.#..#.#..#..#',
+    '#.####.####..#',
+    '#....S...S...#',
+    '#.####.####..#',
+    '#.#..#.#..#..#',
+    '#.#B.#.#..#..#',
+    '#.#..#.#..#..#',
+    '#.####.####..#',
+    '#...........E#',
+    '##############'
+  ]
+];
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const game={
+  playing:false,
+  rafId:null,
+  lastTime:0,
+  frame:0,
+  score:0,
+  level:0, // индекс (0-4)
+  deaths:0,
+  shake:0,
+
+  // Тайлы
+  grid:[],
+  rows:0,
+  cols:0,
+  tileW:0,
+  tileH:0,
+  offsetX:0,
+  offsetY:0,
+
+  // Шар
+  ball:{x:0,y:0,vx:0,vy:0,r:10},
+  startPos:{x:0,y:0},
+  exitPos:{x:0,y:0},
+
+  // Гравитация
+  grav:{x:0,y:0.3},
+  gravDir:'down',
+
+  particles:[],
+  floats:[],
+  trail:[]
+};
+
+const GRAV_STRENGTH=0.3;
+const MAX_SPEED=8;
+const FRICTION=0.995;
+
+// ============================================================
+// LAYOUT
+// ============================================================
+function computeLayout(){
+  if(game.rows===0)return;
+  const maxW=W*0.85;
+  const maxH=H*0.7;
+  const tile=Math.floor(Math.min(maxW/game.cols,maxH/game.rows));
+  game.tileW=tile;
+  game.tileH=tile;
+  game.offsetX=(W-tile*game.cols)/2;
+  game.offsetY=(H-tile*game.rows)/2+20;
+}
+
+function tileCenter(r,c){
+  return{
+    x:game.offsetX+c*game.tileW+game.tileW/2,
+    y:game.offsetY+r*game.tileH+game.tileH/2
+  };
+}
+
+// ============================================================
+// LEVEL LOADING
+// ============================================================
+function loadLevel(idx){
+  const map=LEVELS[idx];
+  game.rows=map.length;
+  game.cols=map[0].length;
+  game.grid=[];
+
+  computeLayout();
+
+  for(let r=0;r<game.rows;r++){
+    game.grid[r]=[];
+    for(let c=0;c<game.cols;c++){
+      const ch=map[r][c];
+      let type=0; // пусто
+      if(ch==='#')type=1; // стена
+      else if(ch==='S')type=2; // шип
+      else if(ch==='B')type=3; // бонус
+      else if(ch==='P'){
+        type=0;
+        const pos=tileCenter(r,c);
+        game.startPos={x:pos.x,y:pos.y};
+      }
+      else if(ch==='E'){
+        type=4; // выход
+        const pos=tileCenter(r,c);
+        game.exitPos={x:pos.x,y:pos.y};
+      }
+      game.grid[r][c]=type;
+    }
+  }
+
+  // Сброс шара
+  game.ball.x=game.startPos.x;
+  game.ball.y=game.startPos.y;
+  game.ball.vx=0;
+  game.ball.vy=0;
+  game.ball.r=Math.min(game.tileW,game.tileH)*0.3;
+
+  // Гравитация вниз по умолчанию
+  setGravity('down');
+
+  game.trail=[];
+  game.particles=[];
+  game.floats=[];
+
+  updateHUD();
+}
+
+function resetBall(){
+  game.ball.x=game.startPos.x;
+  game.ball.y=game.startPos.y;
+  game.ball.vx=0;
+  game.ball.vy=0;
+  game.trail=[];
+}
+
+// ============================================================
+// GRAVITY CONTROL
+// ============================================================
+function setGravity(dir){
+  game.gravDir=dir;
+  if(dir==='up'){game.grav={x:0,y:-GRAV_STRENGTH};gravInd.textContent='⬆';}
+  else if(dir==='down'){game.grav={x:0,y:GRAV_STRENGTH};gravInd.textContent='⬇';}
+  else if(dir==='left'){game.grav={x:-GRAV_STRENGTH,y:0};gravInd.textContent='⬅';}
+  else if(dir==='right'){game.grav={x:GRAV_STRENGTH,y:0};gravInd.textContent='➡';}
+  SFX.grav();
+}
+
+// ============================================================
+// COLLISION
+// ============================================================
+function getTileAt(px,py){
+  const c=Math.floor((px-game.offsetX)/game.tileW);
+  const r=Math.floor((py-game.offsetY)/game.tileH);
+  if(r<0||r>=game.rows||c<0||c>=game.cols)return 1; // За границей = стена
+  return game.grid[r][c];
+}
+
+function checkBallCollision(){
+  const b=game.ball;
+  const r=b.r;
+
+  // Проверяем 4 точки вокруг шара
+  const points=[
+    {x:b.x-r,y:b.y}, // лево
+    {x:b.x+r,y:b.y}, // право
+    {x:b.x,y:b.y-r}, // верх
+    {x:b.x,y:b.y+r}  // низ
+  ];
+
+  for(const p of points){
+    const tile=getTileAt(p.x,p.y);
+    if(tile===1){
+      // Стена: определяем ось столкновения
+      if(p.x===b.x-r){b.x+=r;b.vx=Math.abs(b.vx)*0.3;}
+      else if(p.x===b.x+r){b.x-=r;b.vx=-Math.abs(b.vx)*0.3;}
+      else if(p.y===b.y-r){b.y+=r;b.vy=Math.abs(b.vy)*0.3;}
+      else if(p.y===b.y+r){b.y-=r;b.vy=-Math.abs(b.vy)*0.3;}
+      if(Math.abs(b.vx)>1||Math.abs(b.vy)>1)SFX.bounce();
+    }
+    else if(tile===2){
+      // Шип: смерть
+      killBall();
+      return;
+    }
+    else if(tile===3){
+      // Бонус: сбор
+      const c=Math.floor((p.x-game.offsetX)/game.tileW);
+      const rr=Math.floor((p.y-game.offsetY)/game.tileH);
+      game.grid[rr][c]=0;
+      game.score+=50;
+      const pos=tileCenter(rr,c);
+      addBurst(pos.x,pos.y,'#ffd700',10);
+      addFloat(pos.x,pos.y,'+50','#ffd700',16);
+      SFX.bonus();
+      updateHUD();
+    }
+    else if(tile===4){
+      // Выход: победа
+      levelComplete();
+      return;
+    }
+  }
+}
+
+function killBall(){
+  game.deaths++;
+  game.shake=10;
+  SFX.death();
+  addBurst(game.ball.x,game.ball.y,'#f55',15);
+
+  // Красная вспышка
+  deathFlash.style.opacity='1';
+  setTimeout(()=>{deathFlash.style.opacity='0'},200);
+
+  resetBall();
+  updateHUD();
+}
+
+// ============================================================
+// LEVEL COMPLETE
+// ============================================================
+function levelComplete(){
+  game.playing=false;
+  SFX.win();
+  game.score+=100*(game.level+1);
+  updateHUD();
+
+  if(game.level>=LEVELS.length-1){
+    // Финал игры
+    finalScore.textContent=game.score;
+    SFX.finalWin();
+    setTimeout(()=>{
+      finalMenu.classList.remove('hidden');
+    },500);
+  }else{
+    winScore.textContent=game.score;
+    setTimeout(()=>{
+      winMenu.classList.remove('hidden');
+    },500);
+  }
+}
+
+// ============================================================
+// EFFECTS
+// ============================================================
+function addBurst(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*PI2;
+    const s=2+Math.random()*4;
+    game.particles.push({
+      x,y,
+      vx:Math.cos(a)*s,
+      vy:Math.sin(a)*s,
+      life:1,
+      size:2+Math.random()*3,
+      color
+    });
+  }
+}
+function addFloat(x,y,text,color,size){
+  game.floats.push({x,y,text,color,size,life:1,vy:-40});
+}
+function updateEffects(dt){
+  for(let i=game.particles.length-1;i>=0;i--){
+    const p=game.particles[i];
+    p.x+=p.vx*dt*60;
+    p.y+=p.vy*dt*60;
+    p.vy+=0.1*dt*60;
+    p.life-=dt*1.5;
+    if(p.life<=0)game.particles.splice(i,1);
+  }
+  for(let i=game.floats.length-1;i>=0;i--){
+    const f=game.floats[i];
+    f.y+=f.vy*dt;
+    f.life-=dt*0.8;
+    if(f.life<=0)game.floats.splice(i,1);
+  }
+}
+
+// ============================================================
+// UPDATE
+// ============================================================
+function update(dt){
+  if(!game.playing)return;
+  game.frame++;
+
+  // Физика шара
+  const b=game.ball;
+  b.vx+=game.grav.x*dt*60;
+  b.vy+=game.grav.y*dt*60;
+
+  // Ограничение скорости
+  const spd=Math.hypot(b.vx,b.vy);
+  if(spd>MAX_SPEED){
+    b.vx=(b.vx/spd)*MAX_SPEED;
+    b.vy=(b.vy/spd)*MAX_SPEED;
+  }
+
+  // Трение
+  b.vx*=FRICTION;
+  b.vy*=FRICTION;
+
+  b.x+=b.vx*dt*60;
+  b.y+=b.vy*dt*60;
+
+  // След
+  game.trail.push({x:b.x,y:b.y,life:1});
+  if(game.trail.length>15)game.trail.shift();
+  game.trail.forEach(t=>t.life-=0.07);
+
+  // Коллизии
+  checkBallCollision();
+
+  updateEffects(dt);
+
+  if(game.shake>0){
+    game.shake*=0.9;
+    if(game.shake<0.5)game.shake=0;
+  }
+}
+
+// ============================================================
+// DRAW
+// ============================================================
+function draw(){
+  ctx.fillStyle='#050508';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  if(game.shake>0){
+    ctx.translate((Math.random()-0.5)*game.shake,(Math.random()-0.5)*game.shake);
+  }
+
+  // Фоновая сетка
+  ctx.strokeStyle='rgba(192,0,255,.03)';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+  for(let y=0;y<H;y+=40){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+
+  // Тайлы
+  for(let r=0;r<game.rows;r++){
+    for(let c=0;c<game.cols;c++){
+      const type=game.grid[r][c];
+      const pos=tileCenter(r,c);
+      const tw=game.tileW,th=game.tileH;
+      const x=game.offsetX+c*tw;
+      const y=game.offsetY+r*th;
+
+      if(type===1){
+        // Стена
+        ctx.fillStyle='#2a0a3a';
+        ctx.fillRect(x+1,y+1,tw-2,th-2);
+        ctx.strokeStyle='#c0f';
+        ctx.lineWidth=1;
+        ctx.strokeRect(x+1,y+1,tw-2,th-2);
+      }
+      else if(type===2){
+        // Шип
+        ctx.fillStyle='#1a0a1a';
+        ctx.fillRect(x+1,y+1,tw-2,th-2);
+        ctx.fillStyle='#f55';
+        ctx.shadowBlur=8;
+        ctx.shadowColor='#f55';
+        // Рисуем 4 шипа
+        const cx=pos.x,cy=pos.y,s=Math.min(tw,th)*0.3;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy-s);ctx.lineTo(cx+s*0.3,cy);ctx.lineTo(cx-s*0.3,cy);
+        ctx.closePath();ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx,cy+s);ctx.lineTo(cx+s*0.3,cy);ctx.lineTo(cx-s*0.3,cy);
+        ctx.closePath();ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx-s,cy);ctx.lineTo(cx,cy+s*0.3);ctx.lineTo(cx,cy-s*0.3);
+        ctx.closePath();ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx+s,cy);ctx.lineTo(cx,cy+s*0.3);ctx.lineTo(cx,cy-s*0.3);
+        ctx.closePath();ctx.fill();
+        ctx.shadowBlur=0;
+      }
+      else if(type===3){
+        // Бонус
+        ctx.fillStyle='#1a0a1a';
+        ctx.fillRect(x+1,y+1,tw-2,th-2);
+        ctx.save();
+        ctx.translate(pos.x,pos.y);
+        ctx.rotate(performance.now()*0.002);
+        ctx.fillStyle='#ffd700';
+        ctx.shadowBlur=12;
+        ctx.shadowColor='#ffd700';
+        const s=Math.min(tw,th)*0.25;
+        ctx.beginPath();
+        ctx.moveTo(0,-s);ctx.lineTo(s,0);ctx.lineTo(0,s);ctx.lineTo(-s,0);
+        ctx.closePath();ctx.fill();
+        ctx.restore();
+        ctx.shadowBlur=0;
+      }
+      else if(type===4){
+        // Выход
+        ctx.fillStyle='#0a2a0a';
+        ctx.fillRect(x+1,y+1,tw-2,th-2);
+        ctx.strokeStyle='#0f0';
+        ctx.lineWidth=2;
+        ctx.shadowBlur=10;
+        ctx.shadowColor='#0f0';
+        ctx.strokeRect(x+4,y+4,tw-8,th-8);
+        ctx.shadowBlur=0;
+        ctx.fillStyle='#0f0';
+        ctx.font='bold '+Math.floor(Math.min(tw,th)*0.3)+'px Courier New';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText('EXIT',pos.x,pos.y);
+      }
+      else{
+        // Пустой тайл
+        ctx.fillStyle='rgba(192,0,255,.02)';
+        ctx.fillRect(x+1,y+1,tw-2,th-2);
+      }
+    }
+  }
+
+  // След шара
+  game.trail.forEach(t=>{
+    if(t.life<=0)return;
+    ctx.globalAlpha=t.life*0.3;
+    ctx.fillStyle='#c0f';
+    ctx.beginPath();
+    ctx.arc(t.x,t.y,game.ball.r*t.life,0,PI2);
+    ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // Шар
+  const b=game.ball;
+  ctx.shadowBlur=20;
+  ctx.shadowColor='#c0f';
+  ctx.fillStyle='#c0f';
+  ctx.beginPath();
+  ctx.arc(b.x,b.y,b.r,0,PI2);
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Внутреннее свечение
+  ctx.fillStyle='#fff';
+  ctx.beginPath();
+  ctx.arc(b.x-b.r*0.3,b.y-b.r*0.3,b.r*0.3,0,PI2);
+  ctx.fill();
+
+  // Индикатор направления гравитации на шаре
+  ctx.strokeStyle='rgba(255,255,255,.6)';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(b.x,b.y);
+  ctx.lineTo(b.x+game.grav.x*30,b.y+game.grav.y*30);
+  ctx.stroke();
+
+  // Частицы
+  for(const p of game.particles){
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+
+  // Всплывающий текст
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  for(const f of game.floats){
+    ctx.globalAlpha=Math.max(0,f.life);
+    ctx.fillStyle=f.color;
+    ctx.font='bold '+f.size+'px Courier New';
+    ctx.fillText(f.text,f.x,f.y);
+  }
+  ctx.globalAlpha=1;
+
+  ctx.restore();
+
+  // Сканлайны
+  ctx.fillStyle='rgba(0,0,0,.06)';
+  for(let y=0;y<H;y+=3){
+    ctx.fillRect(0,y,W,1);
+  }
+
+  // Глитч-блоки
+  if(Math.random()<0.015){
+    const gh=Math.random()*20+5;
+    const gy=Math.random()*H;
+    ctx.fillStyle=`rgba(${Math.random()*255|0},${Math.random()*255|0},${Math.random()*255|0},.25)`;
+    ctx.fillRect(Math.random()*W,gy,Math.random()*150,gh);
+  }
+
+  // Виньетка
+  const vig=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(0,0,0,.35)');
+  ctx.fillStyle=vig;
+  ctx.fillRect(0,0,W,H);
+}
+
+// ============================================================
+// HUD
+// ============================================================
+function updateHUD(){
+  lvlVal.textContent=(game.level+1)+'/5';
+  scoreVal.textContent=game.score;
+  deathVal.textContent=game.deaths;
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+window.addEventListener('keydown',e=>{
+  if(!game.playing)return;
+  if(e.code==='Space')e.preventDefault();
+
+  if(e.code==='ArrowUp'||e.code==='KeyW')setGravity('up');
+  else if(e.code==='ArrowDown'||e.code==='KeyS')setGravity('down');
+  else if(e.code==='ArrowLeft'||e.code==='KeyA')setGravity('left');
+  else if(e.code==='ArrowRight'||e.code==='KeyD')setGravity('right');
+});
+
+// Мобильные кнопки
+document.querySelectorAll('.grav-btn').forEach(btn=>{
+  btn.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(!game.playing)return;
+    setGravity(btn.dataset.dir);
+  },{passive:false});
+  btn.addEventListener('mousedown',e=>{
+    e.preventDefault();
+    if(!game.playing)return;
+    setGravity(btn.dataset.dir);
+  });
+});
+
+// ============================================================
+// GAME FLOW
+// ============================================================
+function startGame(){
+  initAudio();
+  btnStart.blur();
+  btnNext.blur();
+  btnFinalRestart.blur();
+
+  startMenu.classList.add('hidden');
+  winMenu.classList.add('hidden');
+  finalMenu.classList.add('hidden');
+
+  game.playing=true;
+  game.score=0;
+  game.level=0;
+  game.deaths=0;
+  game.frame=0;
+  game.shake=0;
+
+  resize();
+  loadLevel(0);
+
+  if(game.rafId)cancelAnimationFrame(game.rafId);
+  game.lastTime=performance.now();
+  game.rafId=requestAnimationFrame(loop);
+}
+
+function nextLevel(){
+  btnNext.blur();
+  initAudio();
+  winMenu.classList.add('hidden');
+
+  game.level++;
+  game.playing=true;
+  loadLevel(game.level);
+
+  if(game.rafId)cancelAnimationFrame(game.rafId);
+  game.lastTime=performance.now();
+  game.rafId=requestAnimationFrame(loop);
+}
+
+function loop(now){
+  if(!game.playing){
+    draw();
+    if(game.shake>0){
+      game.shake*=0.9;
+      game.rafId=requestAnimationFrame(loop);
+    }
+    return;
+  }
+
+  let dt=(now-game.lastTime)/1000;
+  if(!isFinite(dt)||dt<0)dt=0;
+  if(dt>0.05)dt=0.05;
+  game.lastTime=now;
+
+  update(dt);
+  draw();
+
+  game.rafId=requestAnimationFrame(loop);
+}
+
+btnStart.addEventListener('click',startGame);
+btnNext.addEventListener('click',nextLevel);
+btnFinalRestart.addEventListener('click',startGame);
+
+// ============================================================
+// INIT
+// ============================================================
+resize();
+ctx.fillStyle='#050508';
+ctx.fillRect(0,0,W,H);
+</script>
+</body>
+</html>
